@@ -5,7 +5,7 @@ import {
   PartyPopper, Sparkles, Heart, Timer, Play, HelpCircle,
   RotateCcw, AlertCircle
 } from 'lucide-react';
-import { TaskType, ExamParams, ReviewResult } from './types';
+import { TaskType, ReviewResult } from './types';
 import { SEGMENT_MAP } from './constants';
 import SevenSegment from './components/SevenSegment';
 
@@ -20,16 +20,13 @@ const ENCOURAGING_MESSAGES = [
 // 去掉 Verilog 行尾的 // 註解
 const stripComment = (s: string) => s.replace(/\/\/.*$/, '');
 
-// 參數欄位只接受數字，最多兩位
-const toDigits = (s: string) => s.replace(/\D/g, '').slice(0, 2);
-
-// 離開欄位時把參數限制在 01 ~ max 之間並補成兩位數
-const clampParam = (s: string, max: number) =>
-  Math.min(Math.max(parseInt(s, 10) || 1, 1), max).toString().padStart(2, '0');
+// 試題一固定顯示「3.210」，小數點在左一位
+const TASK1_DIGITS = ['3', '2', '1', '0'];
+const task1Seg = (i: number) =>
+  (i === 0 ? '1' : '0') + SEGMENT_MAP[TASK1_DIGITS[i]].substring(1);
 
 const App: React.FC = () => {
   const [activeTask, setActiveTask] = useState<TaskType>(TaskType.TASK1);
-  const [params, setParams] = useState<ExamParams>({ day: '10', stationId: '05' });
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const [isAnswering, setIsAnswering] = useState(false);
@@ -49,9 +46,6 @@ const App: React.FC = () => {
   const timerRef = useRef<number | null>(null);
 
   const taskData = useMemo(() => {
-    const dd = params.day.padStart(2, '0');
-    const ss = params.stationId.padStart(2, '0');
-
     if (activeTask === TaskType.TASK1) {
       return [
         { code: "module no1(input ck, output reg[3:0] s, output reg[7:0] seg);", hint: "定義 I/O" },
@@ -59,10 +53,10 @@ const App: React.FC = () => {
         { code: "  always@(posedge ck) t <= t + 1;", hint: "除頻計數" },
         { code: "  always@(posedge t[13])", hint: "掃描時脈" },
         { code: "  case(s)", hint: "掃描判斷" },
-        { code: `    4'b0001 : begin s <= 4'b0010; seg <= 8'b${SEGMENT_MAP[dd[0]]}; end`, hint: `顯示日期十位 [${dd[0]}]` },
-        { code: `    4'b0010 : begin s <= 4'b0100; seg <= 8'b1${SEGMENT_MAP[dd[1]].substring(1)}; end`, hint: `顯示日期個位 [${dd[1]}]` },
-        { code: `    4'b0100 : begin s <= 4'b1000; seg <= 8'b${SEGMENT_MAP[ss[0]]}; end`, hint: `顯示崗位十位 [${ss[0]}]` },
-        { code: `    default : begin s <= 4'b0001; seg <= 8'b${SEGMENT_MAP[ss[1]]}; end`, hint: `顯示崗位個位 [${ss[1]}]` },
+        { code: `    4'b0001 : begin s <= 4'b0010; seg <= 8'b${task1Seg(0)}; end`, hint: `顯示 [3.]（含小數點）` },
+        { code: `    4'b0010 : begin s <= 4'b0100; seg <= 8'b${task1Seg(1)}; end`, hint: `顯示 [2]` },
+        { code: `    4'b0100 : begin s <= 4'b1000; seg <= 8'b${task1Seg(2)}; end`, hint: `顯示 [1]` },
+        { code: `    default : begin s <= 4'b0001; seg <= 8'b${task1Seg(3)}; end`, hint: `顯示 [0]` },
         { code: "  endcase", hint: "結束判斷" },
         { code: "endmodule", hint: "結束模組" }
       ];
@@ -103,7 +97,7 @@ const App: React.FC = () => {
         { code: "endmodule", hint: "結束模組" }
       ];
     }
-  }, [activeTask, params.day, params.stationId]);
+  }, [activeTask]);
 
   const fullCodeLines = useMemo(() => taskData.map(d => d.code), [taskData]);
 
@@ -164,7 +158,7 @@ const App: React.FC = () => {
   useEffect(() => {
     generateBlanks();
     setResult(null);
-  }, [activeTask, refreshNonce, params.day, params.stationId]);
+  }, [activeTask, refreshNonce]);
 
   // 清除舊版本以明碼存放在瀏覽器中的 Gemini API Key
   useEffect(() => {
@@ -214,34 +208,13 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
-          <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">術科參數配置 (DD.SS)</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500">日期 (DD)</label>
-                <input type="text" inputMode="numeric" maxLength={2} value={params.day} onChange={e => setParams({ ...params, day: toDigits(e.target.value) })} onBlur={() => setParams(p => ({ ...p, day: clampParam(p.day, 31) }))} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500">崗位 (SS)</label>
-                <input type="text" inputMode="numeric" maxLength={2} value={params.stationId} onChange={e => setParams({ ...params, stationId: toDigits(e.target.value) })} onBlur={() => setParams(p => ({ ...p, stationId: clampParam(p.stationId, 99) }))} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
-              </div>
-            </div>
-          </section>
-
           <section className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10"><Cpu size={64} className="text-white" /></div>
             <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8 text-center relative z-10">硬體模擬看板</h2>
             <div className="flex flex-col items-center gap-8 relative z-10">
               <div className="bg-slate-800 p-8 rounded-[2rem] border-[6px] border-slate-700 flex gap-4 shadow-inner">
                 {activeTask === TaskType.TASK1 ? (
-                  // Safe processing for display (ensure always 2 chars)
-                  (() => {
-                    const dd = params.day.padStart(2, '0');
-                    const ss = params.stationId.padStart(2, '0');
-                    return [dd[0], dd[1] + '.', ss[0], ss[1]].map((d, i) => (
-                      <SevenSegment key={i} bits={(d.includes('.') ? '1' : '0') + (SEGMENT_MAP[d[0]] || '00000000').substring(1)} />
-                    ));
-                  })()
+                  TASK1_DIGITS.map((_, i) => <SevenSegment key={i} bits={task1Seg(i)} />)
                 ) : (
                   <SevenSegment bits={!lastKey ? '00000000' : (lastKey === '*' ? SEGMENT_MAP['c'] : lastKey === '#' ? SEGMENT_MAP['revC'] : SEGMENT_MAP[lastKey]) || '00000000'} />
                 )}

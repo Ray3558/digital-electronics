@@ -16,8 +16,3 @@ export interface ReviewResult {
   errors: string[];
   suggestions: string[];
 }
-
-export interface ExamParams {
-  day: string; // 僅日期 (DD)
-  stationId: string; // 崗位編號 (01-99)
-}
