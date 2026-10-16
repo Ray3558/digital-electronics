@@ -30,7 +30,6 @@ npm run build
 - **Vite**: 建置工具
 - **TypeScript**: 靜態型別
 - **Lucide React**: 圖示庫
-- **Google GenAI**: AI 輔助功能 (若有使用)
 
 ## 📦 部署 (Deployment)
 
