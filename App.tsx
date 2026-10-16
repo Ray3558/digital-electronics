@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Terminal, Cpu, Trophy, Settings, X, Send,
+  Terminal, Cpu, Trophy, Send,
   PartyPopper, Sparkles, Heart, Timer, Play, HelpCircle,
   RotateCcw, AlertCircle
 } from 'lucide-react';
@@ -17,6 +17,16 @@ const ENCOURAGING_MESSAGES = [
   "冷靜應對隨機空格，你是邏輯大師！💻"
 ];
 
+// 去掉 Verilog 行尾的 // 註解
+const stripComment = (s: string) => s.replace(/\/\/.*$/, '');
+
+// 參數欄位只接受數字，最多兩位
+const toDigits = (s: string) => s.replace(/\D/g, '').slice(0, 2);
+
+// 離開欄位時把參數限制在 01 ~ max 之間並補成兩位數
+const clampParam = (s: string, max: number) =>
+  Math.min(Math.max(parseInt(s, 10) || 1, 1), max).toString().padStart(2, '0');
+
 const App: React.FC = () => {
   const [activeTask, setActiveTask] = useState<TaskType>(TaskType.TASK1);
   const [params, setParams] = useState<ExamParams>({ day: '10', stationId: '05' });
@@ -30,10 +40,9 @@ const App: React.FC = () => {
   const [userInputs, setUserInputs] = useState<Record<number, string>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null);
-  const [pressedKey, setPressedKey] = useState<string | null>(null);
+  // 與 Verilog 行為一致：放開按鍵後仍顯示最後按下的鍵
+  const [lastKey, setLastKey] = useState<string | null>(null);
 
-  const [apiKey, setApiKey] = useState<string>(localStorage.getItem('gemini_api_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
   const [showCheer, setShowCheer] = useState(false);
   const [cheerMsg, setCheerMsg] = useState("");
 
@@ -101,15 +110,15 @@ const App: React.FC = () => {
   const generateBlanks = () => {
     const indices = Array.from({ length: fullCodeLines.length }, (_, i) => i);
     const validIndices = indices.filter(idx => {
-      const t = fullCodeLines[idx].trim();
-      return t.length > 2 && !t.startsWith('//');
+      return stripComment(fullCodeLines[idx]).trim().length > 2;
     });
     const shuffled = [...validIndices].sort(() => 0.5 - Math.random());
     setBlankIndices(shuffled.slice(0, 5).sort((a, b) => a - b));
     setUserInputs({});
   };
 
-  const normalize = (s: string) => s.replace(/\s+/g, '').replace(/;/g, '').trim();
+  // 評分時忽略註解、空白與分號
+  const normalize = (s: string) => stripComment(s).replace(/\s+/g, '').replace(/;/g, '');
 
   // 開始目前所選題目的挑戰
   const handleStartChallenge = () => {
@@ -157,6 +166,11 @@ const App: React.FC = () => {
     setResult(null);
   }, [activeTask, refreshNonce, params.day, params.stationId]);
 
+  // 清除舊版本以明碼存放在瀏覽器中的 Gemini API Key
+  useEffect(() => {
+    try { localStorage.removeItem('gemini_api_key'); } catch { /* 無法存取 storage 時略過 */ }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 relative">
       {showCheer && (
@@ -165,22 +179,6 @@ const App: React.FC = () => {
             <PartyPopper className="text-yellow-300 animate-bounce" size={32} />
             <span className="text-xl font-black tracking-widest">{cheerMsg}</span>
             <Sparkles className="text-yellow-300 animate-pulse" size={32} />
-          </div>
-        </div>
-      )}
-
-      {showSettings && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 bg-slate-50 border-b flex items-center justify-between">
-              <h3 className="font-bold text-slate-700 flex items-center gap-2"><Settings size={20} className="text-indigo-500" /> 設定</h3>
-              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-            <div className="p-6">
-              <label className="text-xs font-black text-slate-400 uppercase mb-2 block">API Key (可選)</label>
-              <input type="password" className="w-full px-4 py-3 bg-slate-50 border rounded-xl mb-6 outline-none font-mono" value={apiKey} onChange={e => setApiKey(e.target.value)} />
-              <button onClick={() => { localStorage.setItem('gemini_api_key', apiKey); setShowSettings(false); }} className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg transition-transform active:scale-95">儲存設定</button>
-            </div>
           </div>
         </div>
       )}
@@ -211,9 +209,6 @@ const App: React.FC = () => {
               <RotateCcw className="group-hover:rotate-180 transition-transform duration-500" size={20} /> 再次挑戰 (重新挖空)
             </button>
           )}
-          <button onClick={() => setShowSettings(true)} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:bg-slate-50 transition-all shadow-sm">
-            <Settings size={20} />
-          </button>
         </div>
       </header>
 
@@ -224,11 +219,11 @@ const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500">日期 (DD)</label>
-                <input type="text" maxLength={2} value={params.day} onChange={e => setParams({ ...params, day: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
+                <input type="text" inputMode="numeric" maxLength={2} value={params.day} onChange={e => setParams({ ...params, day: toDigits(e.target.value) })} onBlur={() => setParams(p => ({ ...p, day: clampParam(p.day, 31) }))} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500">崗位 (SS)</label>
-                <input type="text" maxLength={2} value={params.stationId} onChange={e => setParams({ ...params, stationId: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
+                <input type="text" inputMode="numeric" maxLength={2} value={params.stationId} onChange={e => setParams({ ...params, stationId: toDigits(e.target.value) })} onBlur={() => setParams(p => ({ ...p, stationId: clampParam(p.stationId, 99) }))} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-black text-center disabled:opacity-50 transition-all focus:border-indigo-500 outline-none" disabled={isAnswering} />
               </div>
             </div>
           </section>
@@ -248,13 +243,13 @@ const App: React.FC = () => {
                     ));
                   })()
                 ) : (
-                  <SevenSegment bits={!pressedKey ? '00000000' : (pressedKey === '*' ? SEGMENT_MAP['c'] : pressedKey === '#' ? SEGMENT_MAP['revC'] : SEGMENT_MAP[pressedKey]) || '00000000'} />
+                  <SevenSegment bits={!lastKey ? '00000000' : (lastKey === '*' ? SEGMENT_MAP['c'] : lastKey === '#' ? SEGMENT_MAP['revC'] : SEGMENT_MAP[lastKey]) || '00000000'} />
                 )}
               </div>
               {activeTask === TaskType.TASK2 && (
                 <div className="grid grid-cols-3 gap-3">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map(k => (
-                    <button key={k} onMouseDown={() => setPressedKey(k)} onMouseUp={() => setPressedKey(null)} className="h-12 w-14 bg-slate-800 text-white font-black rounded-xl hover:bg-slate-700 active:bg-indigo-600 active:scale-90 transition-all shadow-md flex items-center justify-center">{k}</button>
+                    <button key={k} onPointerDown={() => setLastKey(k)} onClick={() => setLastKey(k)} className={`h-12 w-14 bg-slate-800 text-white font-black rounded-xl hover:bg-slate-700 active:bg-indigo-600 active:scale-90 transition-all shadow-md flex items-center justify-center ${lastKey === k ? 'ring-2 ring-indigo-400' : ''}`}>{k}</button>
                   ))}
                 </div>
               )}
@@ -303,10 +298,10 @@ const App: React.FC = () => {
                         </div>
                       ) : result && blankIndices.includes(idx) ? (
                         <div className="w-full">
-                          <div className={`px-2 py-1 rounded-md border-b-2 ${result.blankResults?.find(r => r.index === idx)?.isCorrect ? 'text-emerald-400 border-emerald-500/30' : 'text-red-400 border-red-500/30 line-through'}`}>
+                          <div className={`px-2 py-1 rounded-md border-b-2 ${result.blankResults.find(r => r.index === idx)?.isCorrect ? 'text-emerald-400 border-emerald-500/30' : 'text-red-400 border-red-500/30 line-through'}`}>
                             {userInputs[idx] || "(未填寫)"}
                           </div>
-                          {!result.blankResults?.find(r => r.index === idx)?.isCorrect && (
+                          {!result.blankResults.find(r => r.index === idx)?.isCorrect && (
                             <div className="text-emerald-400 text-[10px] font-black mt-2 pl-2 bg-emerald-900/10 py-1 rounded border-l-2 border-emerald-500 animate-in slide-in-from-left-2">
                               標準語法：{fullCodeLines[idx].trim()}
                             </div>
