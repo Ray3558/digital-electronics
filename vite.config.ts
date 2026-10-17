@@ -7,7 +7,8 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
   },
-  base: '/digital-electronics/',
+  // 相對路徑：同時適用 github.io/digital-electronics/ 與自訂網域根目錄
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
