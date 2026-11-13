@@ -44,6 +44,7 @@ const App: React.FC = () => {
   const [cheerMsg, setCheerMsg] = useState("");
 
   const timerRef = useRef<number | null>(null);
+  const blankInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const taskData = useMemo(() => {
     if (activeTask === TaskType.TASK1) {
@@ -126,6 +127,23 @@ const App: React.FC = () => {
 
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = window.setInterval(() => setSeconds(s => s + 1), 1000);
+  };
+
+  // 比照一般編輯器：Enter / ↓ 跳到下一個空格，↑ 回到上一個空格
+  const handleBlankKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    // 中文輸入法選字時按的 Enter 不處理
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    const pos = blankIndices.indexOf(idx);
+    let target: number | undefined;
+    if (e.key === 'Enter' || e.key === 'ArrowDown') target = blankIndices[pos + 1];
+    else if (e.key === 'ArrowUp') target = blankIndices[pos - 1];
+    else return;
+    e.preventDefault();
+    const el = target !== undefined ? blankInputRefs.current[target] : null;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
   };
 
   const handleGrade = () => {
@@ -262,7 +280,10 @@ const App: React.FC = () => {
                       {isAnswering && blankIndices.includes(idx) ? (
                         <div className="w-full">
                           <input
+                            ref={el => { blankInputRefs.current[idx] = el; }}
                             type="text"
+                            enterKeyHint={idx === blankIndices[blankIndices.length - 1] ? 'done' : 'next'}
+                            onKeyDown={e => handleBlankKeyDown(e, idx)}
                             className={`w-full bg-indigo-900/10 text-indigo-300 border-b-2 border-indigo-500/30 outline-none px-2 py-1 rounded-md transition-all focus:bg-indigo-900/30 focus:border-indigo-400`}
                             value={userInputs[idx] || ""}
                             onChange={e => setUserInputs({ ...userInputs, [idx]: e.target.value })}
