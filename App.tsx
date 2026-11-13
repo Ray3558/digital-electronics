@@ -53,9 +53,9 @@ const App: React.FC = () => {
         { code: "  always@(posedge ck) t <= t + 1;", hint: "除頻計數" },
         { code: "  always@(posedge t[13])", hint: "掃描時脈" },
         { code: "  case(s)", hint: "掃描判斷" },
-        { code: `    4'b0001 : begin s <= 4'b0010; seg <= 8'b${task1Seg(0)}; end`, hint: `顯示 [3.]（含小數點）` },
+        { code: `    4'b0001 : begin s <= 4'b0010; seg <= 8'b${task1Seg(2)}; end`, hint: `顯示 [1]` },
         { code: `    4'b0010 : begin s <= 4'b0100; seg <= 8'b${task1Seg(1)}; end`, hint: `顯示 [2]` },
-        { code: `    4'b0100 : begin s <= 4'b1000; seg <= 8'b${task1Seg(2)}; end`, hint: `顯示 [1]` },
+        { code: `    4'b0100 : begin s <= 4'b1000; seg <= 8'b${task1Seg(0)}; end`, hint: `顯示 [3.]（含小數點）` },
         { code: `    default : begin s <= 4'b0001; seg <= 8'b${task1Seg(3)}; end`, hint: `顯示 [0]` },
         { code: "  endcase", hint: "結束判斷" },
         { code: "endmodule", hint: "結束模組" }
